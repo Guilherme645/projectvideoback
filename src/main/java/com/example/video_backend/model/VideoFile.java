@@ -1,48 +1,47 @@
 package com.example.video_backend.model;
 
+
+import javax.persistence.*;
+
 @Entity
-@Table(name = "video_files")
+@Table(name = "video_file")
 public class VideoFile {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "file_name", nullable = false)
+    // Nome doa arquivo de vídeo
     private String fileName;
 
-    @Column(name = "file_path", nullable = false)
+    // Caminho completo onde o arquivo está armazenado no sistema de arquivos
     private String filePath;
 
-    @Column(name = "size")
+    // Tamanho do arquivo em bytes
     private long size;
 
-    @Column(name = "duration")
-    private long duration;  // duração em segundos
+    // Duração do vídeo em segundos
+    private long duration;
 
-    @Column(name = "upload_time")
-    private LocalDateTime uploadTime;
-
+    // Construtor padrão (necessário para o JPA)
     public VideoFile() {
-        // Construtor padrão
     }
 
-    public VideoFile(String fileName, String filePath, long size, long duration, LocalDateTime uploadTime) {
+    // Construtor com parâmetros
+    public VideoFile(String fileName, String filePath, long size, long duration) {
         this.fileName = fileName;
         this.filePath = filePath;
         this.size = size;
         this.duration = duration;
-        this.uploadTime = uploadTime;
     }
 
     // Getters e Setters
+
     public Long getId() {
         return id;
     }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
+    // O ID é gerado automaticamente, então geralmente não precisamos de um setter para ele
 
     public String getFileName() {
         return fileName;
@@ -74,25 +73,5 @@ public class VideoFile {
 
     public void setDuration(long duration) {
         this.duration = duration;
-    }
-
-    public LocalDateTime getUploadTime() {
-        return uploadTime;
-    }
-
-    public void setUploadTime(LocalDateTime uploadTime) {
-        this.uploadTime = uploadTime;
-    }
-
-    @Override
-    public String toString() {
-        return "VideoFile{" +
-                "id=" + id +
-                ", fileName='" + fileName + '\'' +
-                ", filePath='" + filePath + '\'' +
-                ", size=" + size +
-                ", duration=" + duration +
-                ", uploadTime=" + uploadTime +
-                '}';
     }
 }
