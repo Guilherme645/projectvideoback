@@ -151,4 +151,8 @@ public class VideoFileController {
             return ResponseEntity.status(500).body(null);  // Retorna 500 em caso de erro no servidor
         }
     }
+    @GetMapping("/video/cut/progress/{folderName}/{fileName}")
+    public Double getCutProgress(@PathVariable String folderName, @PathVariable String fileName) {
+        return videoService.getVideoCutProgress(folderName, fileName);
+    }
 }

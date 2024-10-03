@@ -13,6 +13,8 @@ import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -22,6 +24,7 @@ public class VideoService {
     private final Path rootLocation = Paths.get(UPLOAD_DIR);
     private final Path cutsLocation = Paths.get("C:/cortesvideos");
     private final String FFMPEG_PATH = "C:/ffmpeg/ffmpeg-7.0.2-full_build/bin/ffmpeg.exe";
+    private ConcurrentMap<String, Double> progressMap = new ConcurrentHashMap<>();
 
     // Método para carregar o vídeo como recurso
     public Resource loadVideoFromFolderAsResource(String folderName, String fileName) throws IOException {
@@ -76,6 +79,7 @@ public class VideoService {
 
     // Método para cortar um vídeo e salvar na pasta C:/cortesvideos
     public String cutVideoFileFromDirectory(String folderName, String fileName, double startSeconds, double durationSeconds) throws IOException {
+        String videoId = folderName + "_" + fileName; // Identificador único
         Path inputFile = Paths.get(UPLOAD_DIR, folderName, fileName);
 
         // Verifica se o arquivo de entrada existe
@@ -108,11 +112,15 @@ public class VideoService {
         processBuilder.redirectErrorStream(true);
         Process process = processBuilder.start();
 
-        // Lê a saída do FFmpeg
+        // Lê a saída do FFmpeg e atualiza o progresso
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
+            int frameCount = 0;
             while ((line = reader.readLine()) != null) {
-                System.out.println(line); // Log para debug
+                frameCount++;
+                // Simulação de progresso (pode melhorar se FFmpeg retornar frames processados)
+                double progress = (double) frameCount / 100; // Progresso fictício de 0 a 100%
+                progressMap.put(videoId, Math.min(progress, 1.0)); // Atualiza o progresso, não passa de 100%
             }
         }
 
@@ -130,8 +138,18 @@ public class VideoService {
             throw new IOException("Erro ao cortar o vídeo, código de saída do FFmpeg: " + exitCode);
         }
 
+        // Após finalizar, define progresso como 100%
+        progressMap.put(videoId, 1.0);
+
         return outputFilePath.toString(); // Retorna o caminho completo do arquivo cortado
     }
+
+    // Método para obter o progresso do corte
+    public Double getVideoCutProgress(String folderName, String fileName) {
+        String videoId = folderName + "_" + fileName;
+        return progressMap.getOrDefault(videoId, 0.0);
+    }
+
     public List<String> listAllCutFolders() throws IOException {
         Path cutsRootLocation = Paths.get("C:/cortesvideos");
         if (!Files.exists(cutsRootLocation) || !Files.isDirectory(cutsRootLocation)) {
