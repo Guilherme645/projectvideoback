@@ -10,6 +10,8 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -22,15 +24,17 @@ public class VideoService {
     private final String FFMPEG_PATH = "C:/ffmpeg/ffmpeg-7.0.2-full_build/bin/ffmpeg.exe";
 
     // Método para carregar o vídeo como recurso
-    public Resource loadVideoAsResource(String fileName) throws IOException {
-        Path filePath = rootLocation.resolve(fileName).normalize();
+    public Resource loadVideoFromFolderAsResource(String folderName, String fileName) throws IOException {
+        // Monta o caminho para a pasta do vídeo
+        Path folderPath = Paths.get(UPLOAD_DIR).resolve(folderName).normalize();
+        Path filePath = folderPath.resolve(fileName).normalize();
         Resource resource = new UrlResource(filePath.toUri());
 
-        // Verifica se o arquivo existe e é legível
+        // Verifica se o recurso existe e é legível
         if (resource.exists() && resource.isReadable()) {
             return resource;
         } else {
-            throw new IOException("Arquivo de vídeo não encontrado ou não legível: " + fileName);
+            throw new IOException("Arquivo de vídeo não encontrado ou não legível: " + filePath);
         }
     }
 
@@ -70,34 +74,34 @@ public class VideoService {
                 lowerCaseFileName.endsWith(".mkv");  // Adicione mais extensões conforme necessário
     }
 
-    // Corta um arquivo de vídeo e o salva na pasta C:/cortesvideos
+    // Método para cortar um vídeo e salvar na pasta C:/cortesvideos
     public String cutVideoFileFromDirectory(String folderName, String fileName, double startSeconds, double durationSeconds) throws IOException {
-        // Combine o caminho da pasta com o nome do arquivo
-        Path folderPath = rootLocation.resolve(folderName);
-        Path inputFile = folderPath.resolve(fileName);
+        Path inputFile = Paths.get(UPLOAD_DIR, folderName, fileName);
 
-        // Verifica se o arquivo existe na pasta de vídeos
+        // Verifica se o arquivo de entrada existe
         if (!Files.exists(inputFile)) {
             throw new IOException("Vídeo não encontrado: " + fileName);
         }
 
-        // Verifica se a pasta C:/cortesvideos existe, senão cria
-        if (!Files.exists(cutsLocation)) {
-            Files.createDirectories(cutsLocation);
+        // Cria o nome da subpasta com a data atual no formato yyyy-MM-dd
+        String currentDate = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        Path dateSubFolder = Paths.get(cutsLocation.toString(), currentDate);
+        if (!Files.exists(dateSubFolder)) {
+            Files.createDirectories(dateSubFolder); // Cria a subpasta de cortes do dia
         }
 
-        // Gera um nome único para o arquivo de saída
+        // Gera o nome do arquivo cortado com um timestamp para evitar conflitos de nome
         String outputFileName = "cut_" + System.currentTimeMillis() + "_" + fileName;
-        Path outputPath = cutsLocation.resolve(outputFileName).normalize().toAbsolutePath();
+        Path outputFilePath = dateSubFolder.resolve(outputFileName).normalize().toAbsolutePath();
 
-        // Comando FFmpeg para cortar o vídeo
+        // Comando do FFmpeg para cortar o vídeo
         String[] command = {
                 FFMPEG_PATH,
-                "-ss", String.valueOf(startSeconds),
-                "-i", inputFile.toString(),
-                "-t", String.valueOf(durationSeconds),
-                "-c", "copy",
-                outputPath.toString()
+                "-ss", String.valueOf(startSeconds),   // Início do corte
+                "-i", inputFile.toString(),           // Arquivo de entrada
+                "-t", String.valueOf(durationSeconds), // Duração do corte
+                "-c", "copy",                         // Mantém o codec original (sem reprocessamento)
+                outputFilePath.toString()             // Arquivo de saída
         };
 
         ProcessBuilder processBuilder = new ProcessBuilder(command);
@@ -108,36 +112,62 @@ public class VideoService {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                System.out.println(line);
+                System.out.println(line); // Log para debug
             }
         }
 
+        // Espera o processo terminar
+        int exitCode;
         try {
-            int exitCode = process.waitFor();
-            if (exitCode != 0) {
-                throw new IOException("Erro ao cortar o vídeo, código de saída do FFmpeg: " + exitCode);
-            }
+            exitCode = process.waitFor();
         } catch (InterruptedException e) {
-            // Interromper a thread atual e registrar o erro
-            Thread.currentThread().interrupt();  // Restaura o estado de interrupção da thread
-            System.out.println("Processo foi interrompido: " + e.getMessage());
-            throw new IOException("O processo de corte do vídeo foi interrompido", e);
+            Thread.currentThread().interrupt();
+            throw new IOException("O processo de corte foi interrompido.", e);
         }
 
-        return outputFileName;
+        // Verifica se o FFmpeg teve sucesso
+        if (exitCode != 0) {
+            throw new IOException("Erro ao cortar o vídeo, código de saída do FFmpeg: " + exitCode);
+        }
+
+        return outputFilePath.toString(); // Retorna o caminho completo do arquivo cortado
     }
-
-    public Resource loadVideoFromFolderAsResource(String folderName, String fileName) throws IOException {
-        // Monta o caminho para a pasta do vídeo
-        Path folderPath = Paths.get(UPLOAD_DIR).resolve(folderName).normalize();
-        Path filePath = folderPath.resolve(fileName).normalize();
-        Resource resource = new UrlResource(filePath.toUri());
-
-        // Verifica se o recurso existe e é legível
-        if (resource.exists() && resource.isReadable()) {
-            return resource;
-        } else {
-            throw new IOException("Arquivo de vídeo não encontrado: " + filePath);
+    public List<String> listAllCutFolders() throws IOException {
+        Path cutsRootLocation = Paths.get("C:/cortesvideos");
+        if (!Files.exists(cutsRootLocation) || !Files.isDirectory(cutsRootLocation)) {
+            throw new IOException("Diretório de cortes não encontrado: " + cutsRootLocation);
         }
+
+        // Caminha por todas as subpastas no diretório de cortes
+        return Files.walk(cutsRootLocation, 1)
+                .filter(Files::isDirectory)  // Somente diretórios
+                .filter(path -> !path.equals(cutsRootLocation))  // Não incluir o diretório raiz
+                .map(path -> cutsRootLocation.relativize(path).toString())  // Nome relativo da pasta
+                .collect(Collectors.toList());
+    }
+    public List<String> listVideosFromCutFolder(String folderName) throws IOException {
+        Path cutsFolderPath = Paths.get("C:/cortesvideos").resolve(folderName);
+        if (!Files.exists(cutsFolderPath) || !Files.isDirectory(cutsFolderPath)) {
+            throw new IOException("Pasta de cortes não encontrada: " + folderName);
+        }
+
+        return Files.walk(cutsFolderPath, 1)
+                .filter(Files::isRegularFile)  // Somente arquivos
+                .map(path -> cutsFolderPath.relativize(path).toString())  // Nome relativo do arquivo
+                .filter(this::isVideoFile)  // Filtrar somente arquivos de vídeo
+                .collect(Collectors.toList());
+    }
+    public List<String> listCutFolders() throws IOException {
+        Path cutsLocation = Paths.get("C:/cortesvideos");
+
+        if (!Files.exists(cutsLocation) || !Files.isDirectory(cutsLocation)) {
+            throw new IOException("Diretório de cortes não encontrado: " + cutsLocation);
+        }
+
+        return Files.walk(cutsLocation, 1)
+                .filter(Files::isDirectory)  // Somente diretórios
+                .filter(path -> !path.equals(cutsLocation))  // Não incluir o diretório raiz
+                .map(path -> cutsLocation.relativize(path).toString())  // Nome relativo da pasta
+                .collect(Collectors.toList());
     }
 }
