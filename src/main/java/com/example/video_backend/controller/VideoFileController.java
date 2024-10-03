@@ -145,10 +145,10 @@ public class VideoFileController {
                         .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + fileName + "\"")
                         .body(resource);
             } else {
-                return ResponseEntity.status(404).body(null);  // Retorna 404 se o vídeo não for encontrado
+                return ResponseEntity.status(404).body(null);
             }
         } catch (IOException e) {
-            return ResponseEntity.status(500).body(null);  // Retorna 500 em caso de erro no servidor
+            return ResponseEntity.status(500).body(null);
         }
     }
     @GetMapping("/video/cut/progress/{folderName}/{fileName}")
